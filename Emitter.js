@@ -1,35 +1,50 @@
 //A base class to support event emission.
 
+/*globals CustomEvent*/
+
+if (!(window.CustomEvent instanceof Function)) {
+  //polyfill for IE
+  let PolyfillCustomEvent = function(event, eventInit) {
+    eventInit = eventInit || {};
+    var newEvent = document.createEvent('CustomEvent');
+    newEvent.initCustomEvent(event, eventInit.bubbles || false, eventInit.cancelable || false, eventInit.detail || undefined);
+    return newEvent;
+  };
+
+  PolyfillCustomEvent.prototype = window.Event.prototype;
+  window.CustomEvent = PolyfillCustomEvent;
+}
+
+let observers = Symbol();
+
 export default class Emitter {
 
   constructor() {
-    this._observers = {};
+    this[observers] = {};
   }
 
-  emit(eventName, payload) {
-    if (this._observers[eventName]) {
-      this._observers[eventName].forEach((callback) => {
-        callback(payload);
-      });
-    }
+  dispatchEvent(customEvent) {
+    if (!(customEvent instanceof CustomEvent) || !this[observers][customEvent.type]) { return false; }
+
+    this[observers][customEvent.type].forEach((callback) => {
+      callback(customEvent);
+    });
+    return true;
   }
 
-  on(eventName, callback) {
-    if (!eventName && !callback && !typeof callback === 'function') {
-      return;
+  addEventListener(eventName, callback) {
+    if (!eventName || !callback || !(callback instanceof Function)) {
+      return null;
     }
 
-    if (!this._observers[eventName]) {
-      this._observers[eventName] = [];
-    }
+    this[observers][eventName] = this[observers][eventName] || [];
 
-    this._observers[eventName].push(callback);
-    let handlerPosition = this._observers[eventName].length - 1;
+    let handlerPosition = this[observers][eventName].push(callback) - 1;
     return {
       remove: () => {
-        this._observers[eventName].splice(handlerPosition, 1);
+        this[observers][eventName].splice(handlerPosition, 1);
       }
     };
   }
-
 }
+
